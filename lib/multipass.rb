@@ -99,11 +99,7 @@ class MultiPass
 
   CipherError = OpenSSL.const_defined?(:CipherError) ? OpenSSL::CipherError : OpenSSL::Cipher::CipherError
 
-  if Object.const_defined?(:ActiveSupport)
-    include ActiveSupport::Base64
-  else
-    require 'base64'
-  end
+  require 'base64'
 
   # converts unicode (\u003c) to the actual character
   # http://rishida.net/tools/conversion/
