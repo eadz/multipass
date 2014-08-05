@@ -1,5 +1,7 @@
 require "multipass/version"
-require "multipass/aes"
+require 'active_support/message_encryptor'
+require 'active_support/message_verifier'
+require 'active_support/key_generator'
 require 'json'
 require 'base64'
 
@@ -8,6 +10,7 @@ class MultiPass
     class << self
       attr_accessor :message
     end
+
     self.message = "The MultiPass token is invalid."
 
     attr_reader :data, :json, :options
@@ -35,114 +38,43 @@ class MultiPass
     self.message = "The MultiPass token was not able to be decrypted."
   end
 
-  def self.encode(site_key, api_key, options = {})
-    new(site_key, api_key).encode(options)
-  end
-
-  def self.decode(site_key, api_key, data)
-    new(site_key, api_key).decode(data)
-  end
-
-  # options:
-  #   :url_safe => true
-  def initialize(site_key, api_key, options = {})
-    @url_safe   = !options.key?(:url_safe) || options[:url_safe]
-    @crypto_key = site_key+api_key
-  end
-
-  def url_safe?
-    !!@url_safe
+  def initialize(site_key, api_key)
+    salt = OpenSSL::Digest::SHA256.new(api_key).digest
+    password = OpenSSL::Digest::SHA256.new(site_key).digest
+    key = ActiveSupport::KeyGenerator.new(password).generate_key(salt)
+    @crypt = ActiveSupport::MessageEncryptor.new(key)
   end
 
   # Encrypts the given hash into a multipass string.
-  def encode(options = {})
-    options[:expires] = case options[:expires]
-      when Fixnum               then Time.at(options[:expires]).to_s
-      when Time, DateTime, Date then options[:expires].to_s
-      else options[:expires].to_s
-    end
-    self.class.encode_64 Aes.encrypt(options.to_json, @crypto_key), @url_safe
+  def encode(data, expires: nil)
+    h = {:data => JSON.dump(data)}
+    h[:expires] = expires.to_i if expires
+    @crypt.encrypt_and_sign(h)
   end
 
-  # Decrypts the given multipass string and parses it as JSON.  Then, it checks
-  # for a valid expiration date.
+  # Decrypts the given multipass string and parses it as JSON.
+  #Then, it checks for a valid expiration date.
   def decode(data)
-    json = options = nil
-    json = Aes.decrypt(self.class.decode_64(data, @url_safe), @crypto_key)
+    hash = @crypt.decrypt_and_verify(data)
 
-    if json.nil?
+    if hash.nil?
       raise MultiPass::DecryptError.new(data)
     end
 
-    options = decode_json(data, json)
-
-    if !options.is_a?(Hash)
-      raise MultiPass::JSONError.new(data, json, options)
-    end
-
-    options.keys.each do |key|
-      options[key.to_sym] = unencode_javascript_unicode_escape(options.delete(key))
+    if !hash.is_a?(Hash)
+      raise MultiPass::JSONError.new
     end
 
     # Force everything coming out of json into a Time object if it isn't already
-    # with YAJL, it parses dates for us (ugh)
-    if options.has_key?(:expires) && options[:expires].is_a?(String) && !options[:expires].empty?
-      options[:expires] = Time.parse(options[:expires])
+    if hash.has_key?(:expires)
+      raise MultiPass::ExpiredError.new(data, hash) if Time.now.to_i > hash[:expires].to_i
     end
 
-    if options[:expires].nil? || (options[:expires] != '' && Time.now.utc > options[:expires])
-      raise MultiPass::ExpiredError.new(data, json, options)
-    end
-
-    options
+    JSON.load(hash[:data])
   rescue CipherError
-    raise MultiPass::DecryptError.new(data, json, options)
+    raise MultiPass::DecryptError.new(data, hash, options)
   end
 
   CipherError = OpenSSL.const_defined?(:CipherError) ? OpenSSL::CipherError : OpenSSL::Cipher::CipherError
 
-
-  # converts unicode (\u003c) to the actual character
-  # http://rishida.net/tools/conversion/
-  def unencode_javascript_unicode_escape(str)
-    if str.respond_to?(:gsub!)
-      str.gsub!(/\\u([0-9a-fA-F]{4})/) do |s|
-        int = $1.to_i(16)
-        if int.zero? && s != "0000"
-          s
-        else
-          [int].pack("U")
-        end
-      end
-    end
-    str
-  end
-
-  def self.encode_64(s, url_safe = true)
-    b = Base64.strict_encode64(s)
-    b.gsub! /\n/, ''
-    if url_safe
-      b.tr!    '+', '-'
-      b.tr!    '/', '_'
-      b.chomp! '='
-    end
-    b
-  end
-
-  def self.decode_64(s, url_safe = true)
-    if url_safe
-      s = s.dup
-      s.tr! '-', '+'
-      s.tr! '_', '/'
-      s << '='
-    end
-    Base64.strict_decode64(s)
-  end
-
-
-  def decode_json(data, s)
-    JSON.parse(s)
-  rescue JSON::ParserError
-    raise MultiPass::JSONError.new(data, s)
-  end
 end
