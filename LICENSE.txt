@@ -1,4 +1,6 @@
-Copyright (c) 2009 rick olson
+Copyright (c) 2009 Rick Olson, 2014 Eaden McKee
+
+MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the

@@ -1,4 +1,4 @@
-require 'time'
+require "multipass/version"
 require 'ezcrypto'
 
 class MultiPass
@@ -105,7 +105,7 @@ class MultiPass
   # http://rishida.net/tools/conversion/
   def unencode_javascript_unicode_escape(str)
     if str.respond_to?(:gsub!)
-      str.gsub!(/\\u([0-9a-fA-F]{4})/) do |s| 
+      str.gsub!(/\\u([0-9a-fA-F]{4})/) do |s|
         int = $1.to_i(16)
         if int.zero? && s != "0000"
           s
