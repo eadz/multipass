@@ -4,8 +4,9 @@ $LOAD_PATH << File.join(File.dirname(__FILE__), '..', 'lib')
 require 'rubygems'
 require 'test/unit'
 require 'multipass'
-#require 'active_support'
+require 'base64'
 
+#require 'active_support'
 module MultiPassTestHelper
   def assert_multipass(expected, actual)
     assert_equal expected[:email], actual[:email]
@@ -17,7 +18,7 @@ module MultiPassTests
   include MultiPassTestHelper
 
   def test_encodes_multipass
-    expected = MultiPass.encode_64(@key.encrypt(@output.to_json), @mp.url_safe?)
+    expected = MultiPass.encode_64(MultiPass::Aes.encrypt(@output.to_json,@key), @mp.url_safe?)
     assert_equal expected, @mp.encode(@input)
   end
 
@@ -46,15 +47,15 @@ module MultiPassTests
 
   def test_invalidates_bad_json
     assert_raises MultiPass::JSONError do
-      @mp.decode(@key.encrypt64("abc"))
+      @mp.decode(MultiPass::Aes.encrypt("abc", @key))
     end
     assert_raises MultiPass::JSONError do
-      @mp.decode(@key.encrypt64("{a"))
+      @mp.decode(MultiPass::Aes.encrypt("{a", @key))
     end
   end
 
   def test_invalidates_old_expiration
-    encrypted = @key.encrypt64(@input.merge(:expires => (Time.now - 1)).to_json)
+    encrypted = MultiPass::Aes.encrypt(@input.merge(:expires => (Time.now - 1)).to_json, @key)
     assert_raises MultiPass::ExpiredError do
       @mp.decode(encrypted)
     end
@@ -68,7 +69,7 @@ class StandardMultiPassTest < Test::Unit::TestCase
     @date   = Time.now + 1234
     @input  = {:expires => @date, :email => 'ricky@bobby.com'}
     @output = @input.merge(:expires => @input[:expires].to_s)
-    @key    = EzCrypto::Key.with_password('example', 'abc')
+    @key    = 'example'+'abc'
     @mp     = MultiPass.new('example', 'abc', :url_safe => false)
   end
 end
@@ -77,7 +78,7 @@ class UrlSafeMultiPassTest < Test::Unit::TestCase
   include MultiPassTests
 
   def test_encodes_multipass_with_class_method
-    expected = MultiPass.encode_64(@key.encrypt(@output.to_json), @mp.url_safe?)
+    expected = MultiPass.encode_64(MultiPass::Aes.encrypt(@output.to_json, @key), @mp.url_safe?)
     assert_equal expected, MultiPass.encode('example', 'abc', @input)
   end
 
@@ -85,7 +86,7 @@ class UrlSafeMultiPassTest < Test::Unit::TestCase
     @date   = Time.now + 1234
     @input  = {:expires => @date, :email => 'ricky@bobby.com'}
     @output = @input.merge(:expires => @input[:expires].to_s)
-    @key    = EzCrypto::Key.with_password('example', 'abc')
+    @key    = 'example'+'abc'
     @mp     = MultiPass.new('example', 'abc', :url_safe => true)
   end
 end
@@ -94,7 +95,7 @@ class ErrorTest < Test::Unit::TestCase
   include MultiPassTestHelper
 
   def setup
-    @key = EzCrypto::Key.with_password('example', 'abc')
+    @key = 'example'+'abc'
     @mp  = MultiPass.new('example', 'abc')
   end
 
@@ -108,7 +109,7 @@ class ErrorTest < Test::Unit::TestCase
 
   def test_json_error_stores_data
     begin
-      data = @key.encrypt64("abc")
+      data = MultiPass::Aes.encrypt("abc", @key)
       @mp.decode data
     rescue MultiPass::JSONError => e
       assert_equal data, e.data
@@ -117,7 +118,7 @@ class ErrorTest < Test::Unit::TestCase
 
   def test_json_error_stores_json
     begin
-      data = @key.encrypt64("{a")
+      data = MultiPass::Aes.encrypt("{a", @key)
       @mp.decode data
     rescue MultiPass::JSONError => e
       assert_equal "{a", e.json
@@ -127,7 +128,7 @@ class ErrorTest < Test::Unit::TestCase
   def test_expiration_error_stores_data
     begin
       json = {:expires => Time.now - 5, :email => 'ricky@bobby.com'}.to_json
-      data = @key.encrypt64(json)
+      data = MultiPass::Aes.encrypt(json, @key)
       @mp.decode data
     rescue MultiPass::ExpiredError => e
       assert_equal data, e.data
@@ -137,7 +138,7 @@ class ErrorTest < Test::Unit::TestCase
   def test_expiration_error_stores_json
     begin
       json = {:expires => Time.now - 5, :email => 'ricky@bobby.com'}.to_json
-      data = @key.encrypt64(json)
+      data = MultiPass::Aes.encrypt(json, @key)
       @mp.decode data
     rescue MultiPass::ExpiredError => e
       assert_equal json, e.json
@@ -148,7 +149,7 @@ class ErrorTest < Test::Unit::TestCase
     begin
       opt  = {:expires => Time.now - 5, :email => 'ricky@bobby.com'}
       json = opt.to_json
-      data = @key.encrypt64(json)
+      data = MultiPass::Aes.encrypt(json, @key)
       @mp.decode data
     rescue MultiPass::ExpiredError => e
       assert_multipass opt, e.options

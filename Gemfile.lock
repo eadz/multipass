@@ -2,12 +2,10 @@ PATH
   remote: .
   specs:
     multipass (1.4.0)
-      ezcrypto
 
 GEM
   remote: https://rubygems.org/
   specs:
-    ezcrypto (0.7.2)
     rake (10.3.2)
 
 PLATFORMS

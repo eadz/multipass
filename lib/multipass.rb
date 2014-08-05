@@ -1,5 +1,7 @@
 require "multipass/version"
-require 'ezcrypto'
+require "multipass/aes"
+require 'json'
+require 'base64'
 
 class MultiPass
   class Invalid < StandardError
@@ -45,7 +47,7 @@ class MultiPass
   #   :url_safe => true
   def initialize(site_key, api_key, options = {})
     @url_safe   = !options.key?(:url_safe) || options[:url_safe]
-    @crypto_key = EzCrypto::Key.with_password(site_key, api_key)
+    @crypto_key = site_key+api_key
   end
 
   def url_safe?
@@ -59,14 +61,14 @@ class MultiPass
       when Time, DateTime, Date then options[:expires].to_s
       else options[:expires].to_s
     end
-    self.class.encode_64 @crypto_key.encrypt(options.to_json), @url_safe
+    self.class.encode_64 Aes.encrypt(options.to_json, @crypto_key), @url_safe
   end
 
   # Decrypts the given multipass string and parses it as JSON.  Then, it checks
   # for a valid expiration date.
   def decode(data)
     json = options = nil
-    json = @crypto_key.decrypt(self.class.decode_64(data, @url_safe))
+    json = Aes.decrypt(self.class.decode_64(data, @url_safe), @crypto_key)
 
     if json.nil?
       raise MultiPass::DecryptError.new(data)
@@ -99,7 +101,6 @@ class MultiPass
 
   CipherError = OpenSSL.const_defined?(:CipherError) ? OpenSSL::CipherError : OpenSSL::Cipher::CipherError
 
-  require 'base64'
 
   # converts unicode (\u003c) to the actual character
   # http://rishida.net/tools/conversion/
@@ -118,7 +119,7 @@ class MultiPass
   end
 
   def self.encode_64(s, url_safe = true)
-    b = Base64.encode64(s)
+    b = Base64.strict_encode64(s)
     b.gsub! /\n/, ''
     if url_safe
       b.tr!    '+', '-'
@@ -135,21 +136,13 @@ class MultiPass
       s.tr! '_', '/'
       s << '='
     end
-    Base64.decode64(s)
+    Base64.strict_decode64(s)
   end
 
-  if Object.const_defined?(:ActiveSupport)
-    def decode_json(data, s)
-      ActiveSupport::JSON.decode(s)
-    rescue ActiveSupport::JSON::ParseError
-      raise MultiPass::JSONError.new(data, s)
-    end
-  else
-    require 'json'
-    def decode_json(data, s)
-      JSON.parse(s)
-    rescue JSON::ParserError
-      raise MultiPass::JSONError.new(data, s)
-    end
+
+  def decode_json(data, s)
+    JSON.parse(s)
+  rescue JSON::ParserError
+    raise MultiPass::JSONError.new(data, s)
   end
 end
