@@ -1,4 +1,4 @@
-Copyright (c) 2009 Rick Olson, 2014 Eaden McKee
+Copyright (c) 2014 Eaden McKee
 
 MIT License
 

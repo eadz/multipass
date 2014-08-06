@@ -10,7 +10,7 @@ class MultiPass
     end
 
     def encode(data, expires)
-      h = {:data => JSON.dump(data)}
+      h = {:data => JSON.generate(data)}
       h[:expires] = expires.to_i if expires
       @crypt.encrypt_and_sign(h)
     end
@@ -30,7 +30,7 @@ class MultiPass
         raise MultiPass::ExpiredError.new if Time.now.to_i > hash[:expires].to_i
       end
 
-      JSON.load(hash[:data])
+      JSON.parse(hash[:data])
     rescue ActiveSupport::MessageVerifier::InvalidSignature
       raise MultiPass::DecryptError.new
     end
