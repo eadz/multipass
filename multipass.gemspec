@@ -6,8 +6,8 @@ require 'multipass/version'
 Gem::Specification.new do |spec|
   spec.name          = "multipass"
   spec.version       = MultiPass::VERSION
-  spec.authors       = ["Rick Olson", "Eaden McKee"]
-  spec.email         = ["technoweenie@gmail.com", "eaden@coinjar.com"]
+  spec.authors       = ["Eaden McKee"]
+  spec.email         = ["eaden@coinjar.com"]
   spec.summary       = %q{Bare bones implementation of encoding and decoding MultiPass values for SSO.}
   spec.description   = %q{SSO multipass}
   spec.homepage      = "https://github.com/eadz/multipass"
@@ -18,7 +18,10 @@ Gem::Specification.new do |spec|
   spec.test_files    = spec.files.grep(%r{^(test|spec|features)/})
   spec.require_paths = ["lib"]
 
+  spec.add_dependency "activesupport"
+
   spec.add_development_dependency "bundler", "~> 1.6"
   spec.add_development_dependency "rake", "~> 10.0"
-  spec.add_development_dependency "activesupport"
+  spec.add_development_dependency "rspec"
+  spec.add_development_dependency "timecop"
 end
